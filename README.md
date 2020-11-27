@@ -20,4 +20,4 @@ python bn-en_stacked_jm_parser.py --load /path/to/saved-model --test /path/to/ra
 See example testfile.txt
 
 # Pre-Trained Models
-Use [pretrained model](https://bitbucket.org/urmig/workspace/projects/BNEN) for the stacked bn-en parser
+Use [pretrained model](https://bitbucket.org/urmig/bn-en-parser-models/downloads/) for the stacked bn-en parser
