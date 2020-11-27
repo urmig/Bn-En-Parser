@@ -286,7 +286,7 @@ class Parser(ArcEager):
         for node in sentence:
             if node.lang in ['hi', 'bn']:
                 char_embs.append(self.char_rep_bh(node.form, bhf, bhb))
-            elif node.lang == 'en':
+            elif node.lang in ['en', 'ne', 'univ']:
                 char_embs.append(self.char_rep_eng(node.form, ef, eb))
         return char_embs
 
@@ -297,7 +297,7 @@ class Parser(ArcEager):
                 word_embs.append(self.word_rep_hin(node.form))
             elif node.lang == 'bn':
                 word_embs.append(self.word_rep_ben(node.form))
-            elif node.lang == 'en':
+            elif node.lang in ['en', 'ne', 'univ']:
                 word_embs.append(self.word_rep_eng(node.form))
         return word_embs
 
@@ -421,7 +421,6 @@ def build_dependency_graph(parser, graph):
     configuration = Configuration(graph)
     while not parser.isFinalState(configuration):
             rfeatures = parser.basefeaturesEager(configuration.nodes, configuration.stack, configuration.b0)
-            pr_bi_exps
             xi = dy.concatenate([pr_bi_exps[id-1] if id > 0 else parser.pad for id, rform in rfeatures])
             yi = dy.concatenate([xpr_bi_exps[id-1] if id > 0 else parser.xpad for id, rform in rfeatures])
             xh = parser.pr_W1 * xi
@@ -449,17 +448,70 @@ def parse_sent(parser, sentence):
     graph = [leaf._make([0, 'ROOT_F', 'ROOT_L', 'ROOT_P', 'ROOT_C', 'ROOT_T', -1, -1, 'ROOT', 'ROOT', PAD, [None], False])]
     for i,w in enumerate(sentence.split('\n'), 1):
         t=w.split()
-        graph += [leaf._make([i,t[0],'_','_',t[1], '_',-1,-1,'_','_',[None],[None], False])]
+        graph += [leaf._make([int(t[0]),t[1],t[1],'_',t[2], '_',-1,-1,'_','_',[None],[None], False])]
     graph += [leaf._make([0, 'ROOT_F', 'ROOT_L', 'ROOT_P', 'ROOT_C', 'ROOT_T', -1, -1, 'ROOT', 'ROOT', [None], [None], False])]
-    return graph
+    graph, ppos = build_dependency_graph(parser, graph)
+    return '\n'.join(['\t'.join([str(node.id), node.form, node.lemma, pos, u'_', u'_', str(node.pparent),
+                  node.pdrel.strip('%'), u'_', u'_']) for node,pos in zip(graph, ppos)])
 
-def test_raw_sents(test_file):
-    ofp=io.open("/tmp/_raw_sent.txt", 'w', encoding='utf-8')
-    with io.open(test_file, encoding='utf-8') as ifp:
+def Test(test_file, ofp=None, lang=None):
+    with io.open(test_file, encoding='utf-8') as fp:
+        inputGenTest = re.finditer("(.*?)\n\n", fp.read(), re.S)
+
+    parser.eval = True
+    scores = defaultdict(int)
+    good, bad = 0.0, 0.0
+    for idx, sentence in enumerate(inputGenTest):
+        graph = list(depenencyGraph(sentence.group(1), lang))
+        pr_bi_exps, xpr_bi_exps, pos_errs = parser.feature_extraction(graph[1:-1])
+        pred_pos = []
+        for xo, node in zip(pos_errs, graph[1:-1]):
+            p_tag = parser.meta.i2p[np.argmax(xo)]
+            pred_pos.append(p_tag)
+            if node.tag == p_tag:
+                good += 1
+            else:
+                bad += 1
+
+        configuration = Configuration(graph)
+        while not parser.isFinalState(configuration):
+            rfeatures = parser.basefeaturesEager(configuration.nodes, configuration.stack, configuration.b0)
+            xi = dy.concatenate([pr_bi_exps[id-1] if id > 0 else parser.pad for id, rform in rfeatures])
+            yi = dy.concatenate([xpr_bi_exps[id-1] if id > 0 else parser.xpad for id, rform in rfeatures])
+            xh = parser.pr_W1 * xi
+            xi = dy.concatenate([yi, xh])
+            xh = parser.xpr_W1 * xi
+            xh = parser.meta.activation(xh) + parser.xpr_b1
+            xo = parser.xpr_W2*xh + parser.xpr_b2
+            output_probs = dy.softmax(xo).npvalue()
+            validTransitions, _ = parser.get_valid_transitions(configuration) #{0: <bound method arceager.SHIFT>}
+            sortedPredictions = sorted(zip(output_probs, range(len(output_probs))), reverse=True)
+            for score, action in sortedPredictions:
+    	        transition, predictedLabel = parser.meta.i2td[action]
+    	        if parser.meta.transitions[transition] in validTransitions:
+    	            predictedTransitionFunc = validTransitions[parser.meta.transitions[transition]]
+    	            predictedTransitionFunc(configuration, predictedLabel)
+    	            break
+        dgraph = deprojectivize(graph[1:-1])
+        scores = tree_eval(dgraph, scores)
+        #sys.stderr.write("Testing Instances:: %s\r"%idx)
+    sys.stderr.write('\n')
+
+    UAS = round(100. * scores['rightAttach']/(scores['rightAttach']+scores['wrongAttach']),2)
+    LS  = round(100. * scores['rightLabel']/(scores['rightLabel']+scores['wrongLabel']), 2)
+    LAS = round(100. * scores['rightLabeledAttach']/(scores['rightLabeledAttach']+scores['wrongLabeledAttach']),2)
+
+    return good/(good+bad), UAS, LS, LAS
+
+
+def test_raw_sents(testfile, outfile):
+    ofp = io.open(outfile, 'w+', encoding='utf-8')
+    with io.open(testfile, 'r', encoding='utf-8') as ifp:
         inputGenTest = re.finditer("(.*?)\n\n", ifp.read(), re.S)
         for sen in inputGenTest:
             parsed_sent = parse_sent(parser, sen.group(1))
             ofp.write(parsed_sent+'\n\n')
+    ofp.close()
 
 
 def Test(test_file, ofp=None, lang=None):
@@ -512,20 +564,14 @@ def Test(test_file, ofp=None, lang=None):
     return good/(good+bad), UAS, LS, LAS
 
 def tree_eval(sentence, scores):
-    #print sentence
     for node in sentence:
-
         if node.parent == node.pparent:
             scores['rightAttach'] += 1
             if node.drel.strip('%') == node.pdrel.strip('%'):
                 scores['rightLabeledAttach'] += 1
             else:
-                #print "***"
-                #print node
                 scores['wrongLabeledAttach'] += 1
         else:
-            #print "****"
-            #print node
             scores['wrongAttach'] += 1
             scores['wrongLabeledAttach'] += 1
 
@@ -545,7 +591,7 @@ def train_parser(dataset):
         parser.loss = []
         dy.renew_cg()
         for sid, sentence in enumerate(dataset, 1):
-            if sid % 500 == 0 or sid == n_samples:   # print status
+            if sid % 1000 == 0 or sid == n_samples:   # print status
                 trainer.status()
                 print(cum_loss / num_tagged)
                 cum_loss, num_tagged = 0, 0
@@ -607,8 +653,6 @@ def depenencyGraph(sentence, lang=None):
                 tlang = 'en'
         if ':' in drel and drel != 'acl:relcl':
             drel = drel.split(':')[0]
-        if drel == 'obl':
-            drel = 'nmod'
         node = leaf._make([int(id_),form,lemma,tag,ctag,tlang,int(parent),-1,drel,drel,[None],[None], False])
         yield node
     yield leaf._make([0, 'ROOT_F', 'ROOT_L', 'ROOT_P', 'ROOT_C', defaultdict(str), -1, -1, '__ROOT__', '__ROOT__', [None], [None], False])
@@ -625,25 +669,10 @@ def read(fname, lang=None):
             pgraph = graph[:1]+projectivize(graph[1:-1])+graph[-1:]
         except:
             sys.stderr.write('Error Sent :: %d\n' %i)
-            #print(sentence.group(1))
             sys.stdout.flush()
             continue
         data.append(pgraph)
     return data
-
-
-def parse_sent(parser, sentence):
-    leaf = namedtuple('leaf', ['id','form','lemma','tag','ctag','lang','parent','pparent', 'drel','pdrel','left','right', 'visit'])
-    PAD = leaf._make([-1,'PAD','PAD','PAD','PAD','PAD',-1,-1,'PAD','PAD',[None],[None], False])
-    graph = [leaf._make([0, 'ROOT_F', 'ROOT_L', 'ROOT_P', 'ROOT_C', 'ROOT_T', -1, -1, 'ROOT', 'ROOT', PAD, [None], False])]
-    for s in sentence.split("\n"):
-        t=s.split()
-        graph += [leaf._make([int(t[0]),t[2],t[1],'_','_',t[3],-1,-1,'_','_',[None],[None], False])]
-    graph += [leaf._make([0, 'ROOT_F', 'ROOT_L', 'ROOT_P', 'ROOT_C', 'ROOT_T', -1, -1, 'ROOT', 'ROOT', [None], [None], False])]
-    graph, ppos = build_dependency_graph(parser, graph)
-    return '\n'.join(['\t'.join([unicode(node.id), node.form, node.lemma, pos, u'_', u'_', unicode(node.pparent),
-                      node.pdrel.strip('%'), u'_', u'_']) for node,pos in zip(graph, ppos)])
-
 
 def set_class_map(data):
       for graph in data:
@@ -735,11 +764,8 @@ if __name__ == "__main__":
         if args.bcdev:
             POS, UAS, LS, LAS = Test(args.bcdev)
             sys.stderr.write("Bengali CM TEST-SET POS: {}%, UAS: {}%, LS: {}% and LAS: {}%\n".format(POS, UAS, LS, LAS))
-        '''if args.test:
-            test_raw_sents(args.test)
-            POS, UAS, LS, LAS = Test("/tmp/_raw_sent.txt")
-            os.remove("/tmp/_raw_sent.txt")
-            sys.stderr.write("Bengali CM TEST-SET POS: {}%, UAS: {}%, LS: {}% and LAS: {}%\n".format(POS, UAS, LS, LAS))'''
+        if args.test:
+            test_raw_sents(args.test, args.outfile)
     elif args.base_model:
         parser = Parser(model=args.base_model, new_meta=meta)
         trainer = meta.trainer(parser.model)
