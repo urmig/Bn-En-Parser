@@ -2,6 +2,11 @@
 WORK IN PROGRESS
 --------
 TODO: Refactor Code
+# New : Model Deployed !
+Try out [Bn-En Dependency Parser](http://ec2-18-214-87-91.compute-1.amazonaws.com/) <br/>
+Input format : Sentence with normalized words concatenated by language ids : 'bn' for Bengali, 'en' for English. <br/>
+For eg : Fun_en demand_en oV_bn SunaweV_bn hayZa_bn mAJeV_bn mAJeV_bn. <br/>
+
 # Summary
 POS Tagger + Dependency Parser for Bengali-English Code-Mixed Tweets
 
