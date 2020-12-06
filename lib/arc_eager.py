@@ -42,11 +42,12 @@ class ArcEager(object):
         s0 = configuration.stack[-1]
         s0N = configuration.nodes[s0]
         b0N = configuration.nodes[b0]
+
         configuration.nodes[b0] = configuration.nodes[b0]._replace(pparent=s0N.id, pdrel=label)
         if b0 < s0:
-	        configuration.nodes[s0] = configuration.nodes[s0]._replace(left=configuration.nodes[s0].left+[b0])
+            configuration.nodes[s0] = configuration.nodes[s0]._replace(left=configuration.nodes[s0].left+[b0])
         else:
-	        configuration.nodes[s0] = configuration.nodes[s0]._replace(right=configuration.nodes[s0].right+[b0])
+            configuration.nodes[s0] = configuration.nodes[s0]._replace(right=configuration.nodes[s0].right+[b0])
         configuration.stack.append(b0)
         configuration.b0 = b0+1
 
@@ -60,9 +61,9 @@ class ArcEager(object):
         b0N = configuration.nodes[b0]
         configuration.nodes[s0] = configuration.nodes[s0]._replace(pparent=b0N.id, pdrel=label)
         if s0 < b0:
-	           configuration.nodes[b0] = configuration.nodes[b0]._replace(left=configuration.nodes[b0].left+[s0])
+            configuration.nodes[b0] = configuration.nodes[b0]._replace(left=configuration.nodes[b0].left+[s0])
         else:
-	           configuration.nodes[b0] = configuration.nodes[b0]._replace(right=configuration.nodes[b0].right+[s0])
+            configuration.nodes[b0] = configuration.nodes[b0]._replace(right=configuration.nodes[b0].right+[s0])
 
     def REDUCE(self, configuration, label=None):
         """
@@ -125,7 +126,6 @@ class ArcEager(object):
     def action_cost(self, configuration, labeled_transition, transitions, valid_transitions):
        stack, nodes, b0 = configuration.stack, configuration.nodes, configuration.b0
        transition, label = labeled_transition
-
        if transitions[transition] not in valid_transitions: return 1000
 
        lost = 0

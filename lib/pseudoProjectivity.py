@@ -110,7 +110,13 @@ def deprojectivize(nodes, scheme="head+path"):
         node = nodes[nC]
         parent, child, drel = node.pparent, node.id, node.pdrel
         if re.search(r"\|", drel):
-            syntacticLabel,linearHeadLabel,linearHead = drel.split("|") + [parent-1]
+            t=drel.split("|")
+            if(len(t)>2):
+                syntacticLabel=t[0]
+                linearHeadLabel=t[1]
+                linearHead=parent-1
+            else:
+               syntacticLabel,linearHeadLabel,linearHead = drel.split("|") + [parent-1]
             syntacticLabel = syntacticLabel + "%" if re.search(r"%", drel) else syntacticLabel
 
             syntacticHead = BSF(nodes, tree, linearHead, linearHeadLabel, node.id-1) # -1 -> to tally
