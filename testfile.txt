@@ -1,0 +1,17 @@
+1	@SangeetBangla	univ
+2	woVmAxeVra	bn
+3	staff	en
+4	guloV	bn
+5	ki	bn
+6	GumiyZeV	bn
+7	geVCeV	bn
+8	?	univ
+
+1	Fun	en
+2	demand	en
+3	oV	bn
+4	SunaweV	bn
+5	hayZa	bn
+6	mAJeV	bn
+7	mAJeV	bn
+8	!	univ
